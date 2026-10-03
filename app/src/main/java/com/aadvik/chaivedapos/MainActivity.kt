@@ -2,17 +2,16 @@
 
 package com.aadvik.chaivedapos
 
+import android.app.DatePickerDialog
 import android.os.Bundle
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.pm.PackageManager
-import android.content.Intent
 import android.os.Build
 
 import android.widget.Toast
-import android.app.DatePickerDialog
 import android.graphics.BitmapFactory
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,7 +21,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -188,12 +186,10 @@ data class RestaurantSettingsData(
     val mobile: String = "",
     val email: String = "",
     val gstin: String = "",
-    val fssaiNumber: String = "",
     val gstEnabled: Boolean = false,
     val gstPercent: Double = 5.0,
     val billHeader: String = "Café • Juice • & More",
-    val billFooter: String = "Thank you. Visit again!",
-    val logoUri: String = ""
+    val billFooter: String = "Thank you. Visit again!"
 )
 
 data class PrinterSettingsData(
@@ -413,33 +409,6 @@ fun ChaiVedaApp() {
 
     val restaurantSettings = remember { mutableStateOf(RestaurantSettingsData()) }
 
-    var showLogoDialog by remember { mutableStateOf(false) }
-
-    val logoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: Exception) { }
-
-            val newSettings = restaurantSettings.value.copy(logoUri = uri.toString())
-            restaurantSettings.value = newSettings
-            coroutineScope.launch {
-                restaurantSettingsDao.insertSettings(
-                    RestaurantSettingsEntity(
-                        id = 1, name = newSettings.name, address = newSettings.address,
-                        mobile = newSettings.mobile, email = newSettings.email, gstin = newSettings.gstin,
-                        fssaiNumber = newSettings.fssaiNumber,
-                        gstEnabled = newSettings.gstEnabled, gstPercent = newSettings.gstPercent,
-                        billHeader = newSettings.billHeader, billFooter = newSettings.billFooter,
-                        logoUri = newSettings.logoUri
-                    )
-                )
-            }
-        }
-    }
-
     LaunchedEffect(restaurantSettingsFromDatabase) {
         val saved = restaurantSettingsFromDatabase
         if (saved != null) {
@@ -449,12 +418,10 @@ fun ChaiVedaApp() {
                 mobile = saved.mobile,
                 email = saved.email,
                 gstin = saved.gstin,
-                fssaiNumber = saved.fssaiNumber,
                 gstEnabled = saved.gstEnabled,
                 gstPercent = saved.gstPercent,
                 billHeader = saved.billHeader,
-                billFooter = saved.billFooter,
-                logoUri = saved.logoUri
+                billFooter = saved.billFooter
             )
         }
     }
@@ -572,8 +539,6 @@ fun ChaiVedaApp() {
                     unpaidCount = unpaidBills.count {
                         it.paymentStatus != "Paid"
                     },
-                    logoUri = restaurantSettings.value.logoUri,
-                    onCustomizeLogo = { showLogoDialog = true },
 
                     onNewBill = {
                         currentScreen = AppScreen.POS
@@ -705,8 +670,6 @@ fun ChaiVedaApp() {
 
                     BillGeneratedScreen(
                         bill = bill,
-                        logoUri = restaurantSettings.value.logoUri,
-                        fssaiNumber = restaurantSettings.value.fssaiNumber,
 
                         onBackDashboard = {
                             currentScreen = AppScreen.DASHBOARD
@@ -1038,20 +1001,6 @@ fun ChaiVedaApp() {
                 RestaurantDetailsScreen(
                     settings = restaurantSettings.value,
                     onBack = { currentScreen = AppScreen.SETTINGS },
-                    onChooseLogo = { logoPickerLauncher.launch(arrayOf("image/*")) },
-                    onRemoveLogo = {
-                        val cleared = restaurantSettings.value.copy(logoUri = "")
-                        restaurantSettings.value = cleared
-                        coroutineScope.launch {
-                            restaurantSettingsDao.insertSettings(
-                                RestaurantSettingsEntity(
-                                    id = 1, name = cleared.name, address = cleared.address, mobile = cleared.mobile,
-                                    email = cleared.email, gstin = cleared.gstin, fssaiNumber = cleared.fssaiNumber, gstEnabled = cleared.gstEnabled,
-                                    gstPercent = cleared.gstPercent, billHeader = cleared.billHeader, billFooter = cleared.billFooter, logoUri = ""
-                                )
-                            )
-                        }
-                    },
                     onSave = { settings ->
                         restaurantSettings.value = settings
                         coroutineScope.launch {
@@ -1063,12 +1012,10 @@ fun ChaiVedaApp() {
                                     mobile = settings.mobile,
                                     email = settings.email,
                                     gstin = settings.gstin,
-                                    fssaiNumber = settings.fssaiNumber,
                                     gstEnabled = settings.gstEnabled,
                                     gstPercent = settings.gstPercent,
                                     billHeader = settings.billHeader,
-                                    billFooter = settings.billFooter,
-                                    logoUri = settings.logoUri
+                                    billFooter = settings.billFooter
                                 )
                             )
                         }
@@ -1079,8 +1026,6 @@ fun ChaiVedaApp() {
             AppScreen.PRINTER_SETTINGS -> {
                 PrinterSettingsScreen(
                     settings = printerSettings.value,
-                    logoUri = restaurantSettings.value.logoUri,
-                    fssaiNumber = restaurantSettings.value.fssaiNumber,
                     onBack = { currentScreen = AppScreen.SETTINGS },
                     onSave = { settings ->
                         printerSettings.value = settings
@@ -1121,31 +1066,6 @@ fun ChaiVedaApp() {
                     onBack = { currentScreen = AppScreen.SETTINGS }
                 )
             }
-        }
-
-        if (showLogoDialog) {
-            LogoCustomizationDialog(
-                logoUri = restaurantSettings.value.logoUri,
-                onDismiss = { showLogoDialog = false },
-                onUpload = {
-                    showLogoDialog = false
-                    logoPickerLauncher.launch(arrayOf("image/*"))
-                },
-                onRemove = {
-                    showLogoDialog = false
-                    val cleared = restaurantSettings.value.copy(logoUri = "")
-                    restaurantSettings.value = cleared
-                    coroutineScope.launch {
-                        restaurantSettingsDao.insertSettings(
-                            RestaurantSettingsEntity(
-                                id = 1, name = cleared.name, address = cleared.address, mobile = cleared.mobile,
-                                email = cleared.email, gstin = cleared.gstin, fssaiNumber = cleared.fssaiNumber, gstEnabled = cleared.gstEnabled,
-                                gstPercent = cleared.gstPercent, billHeader = cleared.billHeader, billFooter = cleared.billFooter, logoUri = ""
-                            )
-                        )
-                    }
-                }
-            )
         }
 
         if (showExitDialog) {
@@ -1234,49 +1154,6 @@ fun WelcomeScreen(
     }
 }
 
-@Composable
-private fun LogoCustomizationDialog(
-    logoUri: String, onDismiss: () -> Unit, onUpload: () -> Unit, onRemove: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Customize Café Logo", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                LogoImage(logoUri, Modifier.size(96.dp))
-                Spacer(Modifier.height(12.dp))
-                Text("This logo will appear on the dashboard and bill.", fontSize = 13.sp, color = TeaBrown)
-            }
-        },
-        confirmButton = { TextButton(onClick = onUpload) { Text("Upload / Change", color = Peach, fontWeight = FontWeight.Bold) } },
-        dismissButton = {
-            Row {
-                if (logoUri.isNotBlank()) TextButton(onClick = onRemove) { Text("Remove", color = Red) }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-            }
-        }
-    )
-}
-
-@Composable
-private fun LogoImage(logoUri: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val bitmap = remember(logoUri) {
-        if (logoUri.isBlank()) null else try {
-            context.contentResolver.openInputStream(android.net.Uri.parse(logoUri))?.use {
-                BitmapFactory.decodeStream(it)?.asImageBitmap()
-            }
-        } catch (_: Exception) { null }
-    }
-    Surface(modifier = modifier, shape = androidx.compose.foundation.shape.CircleShape, color = White.copy(alpha = 0.82f), shadowElevation = 2.dp) {
-        if (bitmap != null) {
-            Image(bitmap, "Café logo", Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.CircleShape), contentScale = ContentScale.Crop)
-        } else {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("♙", fontSize = 30.sp, color = DeepBrown) }
-        }
-    }
-}
-
 // ============================================================
 // DASHBOARD
 // ============================================================
@@ -1284,8 +1161,6 @@ private fun LogoImage(logoUri: String, modifier: Modifier = Modifier) {
 @Composable
 fun DashboardScreen(
     unpaidCount: Int,
-    logoUri: String,
-    onCustomizeLogo: () -> Unit,
     onNewBill: () -> Unit,
     onSettlement: () -> Unit,
     onReports: () -> Unit,
@@ -1311,11 +1186,17 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
-                    Box(
-                        modifier = Modifier.padding(end = 10.dp).size(48.dp).clickable { onCustomizeLogo() },
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        modifier = Modifier.padding(end = 10.dp),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = White.copy(alpha = 0.75f)
                     ) {
-                        LogoImage(logoUri, Modifier.fillMaxSize())
+                        Text(
+                            text = "♙",
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                            fontSize = 21.sp,
+                            color = DeepBrown
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -1348,7 +1229,7 @@ fun DashboardScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = "Hello 👋",
+                                text = "Good Morning 👋",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = DeepBrown
@@ -2466,21 +2347,16 @@ fun tableStatusColor(status: String) = when(status) { "Occupied" -> LightRed; "R
 // ============================================================
 
 @Composable
-fun RestaurantDetailsScreen(
-    settings: RestaurantSettingsData, onBack: () -> Unit, onSave: (RestaurantSettingsData) -> Unit,
-    onChooseLogo: () -> Unit, onRemoveLogo: () -> Unit
-) {
+fun RestaurantDetailsScreen(settings: RestaurantSettingsData, onBack: () -> Unit, onSave: (RestaurantSettingsData) -> Unit) {
     var name by remember { mutableStateOf(settings.name) }
     var address by remember { mutableStateOf(settings.address) }
     var mobile by remember { mutableStateOf(settings.mobile) }
     var email by remember { mutableStateOf(settings.email) }
     var gstin by remember { mutableStateOf(settings.gstin) }
-    var fssaiNumber by remember { mutableStateOf(settings.fssaiNumber) }
     var gstEnabled by remember { mutableStateOf(settings.gstEnabled) }
     var gstPercent by remember { mutableStateOf(settings.gstPercent.toString()) }
     var header by remember { mutableStateOf(settings.billHeader) }
     var footer by remember { mutableStateOf(settings.billFooter) }
-    var logoUri by remember { mutableStateOf(settings.logoUri) }
     Scaffold(topBar = { TopAppBar(title={Text("Restaurant Details", fontWeight=FontWeight.Bold)}, navigationIcon={TextButton(onClick=onBack){Text("Back",color=White)}}, colors=TopAppBarDefaults.topAppBarColors(containerColor=Peach,titleContentColor=White)) }) { padding ->
         Column(Modifier.fillMaxSize().background(Cream).padding(padding).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(9.dp)) {
             OutlinedTextField(name,{name=it},label={Text("Café Name")},modifier=Modifier.fillMaxWidth(),singleLine=true)
@@ -2488,26 +2364,11 @@ fun RestaurantDetailsScreen(
             OutlinedTextField(mobile,{mobile=it},label={Text("Mobile")},modifier=Modifier.fillMaxWidth(),singleLine=true)
             OutlinedTextField(email,{email=it},label={Text("Email")},modifier=Modifier.fillMaxWidth(),singleLine=true)
             OutlinedTextField(gstin,{gstin=it},label={Text("GSTIN")},modifier=Modifier.fillMaxWidth(),singleLine=true)
-            OutlinedTextField(fssaiNumber,{fssaiNumber=it},label={Text("FSSAI Number")},modifier=Modifier.fillMaxWidth(),singleLine=true)
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text("Enable GST",Modifier.weight(1f),fontWeight=FontWeight.Bold);Switch(gstEnabled,{gstEnabled=it})}
             if(gstEnabled) OutlinedTextField(gstPercent,{gstPercent=it.filter{c->c.isDigit()||c=='.'}},label={Text("GST %")},modifier=Modifier.fillMaxWidth(),singleLine=true)
             OutlinedTextField(header,{header=it},label={Text("Bill Header")},modifier=Modifier.fillMaxWidth())
             OutlinedTextField(footer,{footer=it},label={Text("Bill Footer")},modifier=Modifier.fillMaxWidth())
-
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = White), shape = RoundedCornerShape(16.dp)) {
-                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    LogoImage(logoUri, Modifier.size(72.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Café Logo", fontWeight = FontWeight.Bold, color = DeepBrown)
-                        Text("Shown on dashboard and bill", fontSize = 12.sp, color = TeaBrown)
-                    }
-                    TextButton(onClick = onChooseLogo) { Text(if (logoUri.isBlank()) "Upload" else "Change", color = Peach) }
-                }
-                if (logoUri.isNotBlank()) TextButton(onClick = { logoUri = ""; onRemoveLogo() }, modifier = Modifier.padding(start = 14.dp)) { Text("Remove Logo", color = Red) }
-            }
-
-            Button(onClick={onSave(RestaurantSettingsData(name.trim(),address.trim(),mobile.trim(),email.trim(),gstin.trim(),fssaiNumber.trim(),gstEnabled,gstPercent.toDoubleOrNull()?:5.0,header,footer,logoUri));onBack()},modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=Peach)){Text("Save Restaurant Details")}
+            Button(onClick={onSave(RestaurantSettingsData(name.trim(),address.trim(),mobile.trim(),email.trim(),gstin.trim(),gstEnabled,gstPercent.toDoubleOrNull()?:5.0,header,footer));onBack()},modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=Peach)){Text("Save Restaurant Details")}
         }
     }
 }
@@ -2519,8 +2380,6 @@ fun RestaurantDetailsScreen(
 @Composable
 fun PrinterSettingsScreen(
     settings: PrinterSettingsData,
-    logoUri: String = "",
-    fssaiNumber: String = "",
     onBack: () -> Unit,
     onSave: (PrinterSettingsData) -> Unit
 ) {
@@ -2538,7 +2397,6 @@ fun PrinterSettingsScreen(
     var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
     var statusMessage by remember { mutableStateOf("Printer not connected") }
     var isWorking by remember { mutableStateOf(false) }
-    var showPrintPreview by remember { mutableStateOf(false) }
 
     val permissionLauncher =
         androidx.activity.compose.rememberLauncherForActivityResult(
@@ -2907,13 +2765,6 @@ fun PrinterSettingsScreen(
             )
 
             OutlinedButton(
-                onClick = { showPrintPreview = true },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Print Preview")
-            }
-
-            OutlinedButton(
                 onClick = {
                     if (!connected) {
                         Toast.makeText(
@@ -2985,54 +2836,6 @@ fun PrinterSettingsScreen(
             }
         }
     }
-
-    if (showPrintPreview) {
-        AlertDialog(
-            onDismissRequest = { showPrintPreview = false },
-            title = { Text("Print Preview", fontWeight = FontWeight.Bold) },
-            text = {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(0.92f),
-                        colors = CardDefaults.cardColors(containerColor = White),
-                        border = BorderStroke(1.dp, Color.LightGray),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            if (logoUri.isNotBlank() && logo) {
-                                LogoImage(logoUri, Modifier.size(48.dp))
-                                Spacer(Modifier.height(5.dp))
-                            }
-                            Text("CHAI VEDA", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Text(header.ifBlank { "Café • Juice • & More" }, fontSize = 11.sp, color = TeaBrown)
-                            if (fssaiNumber.isNotBlank()) {
-                                Text("FSSAI: $fssaiNumber", fontSize = 10.sp, color = TeaBrown)
-                            }
-                            HorizontalDivider(Modifier.padding(vertical = 7.dp))
-                            Text("Bill No.   CV-0001", fontSize = 11.sp)
-                            Text("Date       01 Oct 2026, 05:15 AM", fontSize = 10.sp, color = TeaBrown)
-                            Spacer(Modifier.height(5.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Elaichi Chai", fontSize = 11.sp); Text("₹100", fontSize = 11.sp) }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Ginger Chai", fontSize = 11.sp); Text("₹50", fontSize = 11.sp) }
-                            HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("TOTAL", fontWeight = FontWeight.Bold); Text("₹150", fontWeight = FontWeight.Bold) }
-                            Spacer(Modifier.height(7.dp))
-                            Text(footer.ifBlank { "Thank you. Visit again!" }, fontSize = 10.sp, color = TeaBrown)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showPrintPreview = false }) { Text("Close", color = Peach) }
-            }
-        )
-    }
 }
 
 // ============================================================
@@ -3065,7 +2868,7 @@ fun PaymentSettingsScreen(settings: PaymentSettingsData, onBack: () -> Unit, onS
 fun BackupRestoreScreen(menuCount:Int, inventoryCount:Int, tableCount:Int, restaurantSettings:RestaurantSettingsData, paymentSettings:PaymentSettingsData, onBack:()->Unit){
     val context=LocalContext.current
     var showBackup by remember{mutableStateOf(false)}
-    val backupText="""CHAI VEDA BACKUP\nRestaurant=${restaurantSettings.name}\nAddress=${restaurantSettings.address}\nMobile=${restaurantSettings.mobile}\nGSTIN=${restaurantSettings.gstin}\nFSSAI=${restaurantSettings.fssaiNumber}\nGST Enabled=${restaurantSettings.gstEnabled}\nGST Percent=${restaurantSettings.gstPercent}\nMenu Items=$menuCount\nInventory Items=$inventoryCount\nTables=$tableCount\nCash=${paymentSettings.cashEnabled}\nUPI=${paymentSettings.upiEnabled}\nCard=${paymentSettings.cardEnabled}\nOther=${paymentSettings.otherEnabled}\nUPI ID=${paymentSettings.upiId}\nDefault Payment=${paymentSettings.defaultMode}"""
+    val backupText="""CHAI VEDA BACKUP\nRestaurant=${restaurantSettings.name}\nAddress=${restaurantSettings.address}\nMobile=${restaurantSettings.mobile}\nGSTIN=${restaurantSettings.gstin}\nGST Enabled=${restaurantSettings.gstEnabled}\nGST Percent=${restaurantSettings.gstPercent}\nMenu Items=$menuCount\nInventory Items=$inventoryCount\nTables=$tableCount\nCash=${paymentSettings.cashEnabled}\nUPI=${paymentSettings.upiEnabled}\nCard=${paymentSettings.cardEnabled}\nOther=${paymentSettings.otherEnabled}\nUPI ID=${paymentSettings.upiId}\nDefault Payment=${paymentSettings.defaultMode}"""
     Scaffold(topBar={TopAppBar(title={Text("Backup & Restore",fontWeight=FontWeight.Bold)},navigationIcon={TextButton(onClick=onBack){Text("Back",color=White)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=Peach,titleContentColor=White))}){padding->
         Column(Modifier.fillMaxSize().background(Cream).padding(padding).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
             Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=White)){Column(Modifier.padding(16.dp)){Text("Current Data",fontWeight=FontWeight.Bold,fontSize=18.sp);Text("Menu: $menuCount items");Text("Inventory: $inventoryCount items");Text("Tables: $tableCount")}}
@@ -3101,7 +2904,7 @@ fun MenuManagementScreen(
     var deletingProduct by remember { mutableStateOf<MenuProduct?>(null) }
     var selectedCategory by remember { mutableStateOf("All") }
 
-    val categories = listOf("All", "Chai", "Coffee", "Snacks", "Juice")
+    val categories = listOf("All") + products.map { it.category }.distinct().sorted()
     val filteredProducts = if (selectedCategory == "All") products else products.filter { it.category == selectedCategory }
 
     Scaffold(
@@ -3243,7 +3046,7 @@ fun ProductEditorDialog(
     onSave: (MenuProduct) -> Unit
 ) {
     var name by remember { mutableStateOf(product?.name ?: "") }
-    var category by remember { mutableStateOf(product?.category ?: "Chai") }
+    var category by remember { mutableStateOf(product?.category ?: "Tea Collection") }
     var price by remember { mutableStateOf(product?.price?.toString() ?: "") }
     var foodType by remember { mutableStateOf(product?.foodType ?: "Veg") }
     var available by remember { mutableStateOf(product?.available ?: true) }
@@ -3263,7 +3066,7 @@ fun ProductEditorDialog(
         }
     }
 
-    val categories = listOf("Chai", "Coffee", "Snacks", "Juice")
+    val categories = listOf("Tea Collection", "Hot Coffee Selection", "Iced Coffee & Shakes", "Juices", "Salad", "Premium Milkshakes", "Refreshing Mojitos", "Butter & Toasts", "Burgers", "Sandwiches & Breads", "Fries & Nachos", "Paratha", "All Time Fav.", "Wraps", "Vada Pav", "Maggie & Noodles", "Pasta", "Pizza", "Chinese Starters", "Fried Rice", "Soups", "Desserts")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -3276,12 +3079,6 @@ fun ProductEditorDialog(
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = { imagePicker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth()) {
                     Text(if (imageUri.isBlank()) "Upload Item Image" else "Change Item Image")
-                }
-                if (imageUri.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    TextButton(onClick = { imageUri = "" }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Remove Image", color = Red, fontWeight = FontWeight.Bold)
-                    }
                 }
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Item Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -3379,7 +3176,7 @@ fun POSScreen(
     var showOrderSheet by remember { mutableStateOf(false) }
     val cart = remember { mutableStateListOf<CartItem>() }
 
-    val categories = listOf("All", "Chai", "Coffee", "Snacks", "Juice")
+    val categories = listOf("All") + products.map { it.category }.distinct().sorted()
     val filteredProducts = products.filter { product ->
         product.available &&
                 (selectedCategory == "All" || product.category.equals(selectedCategory, ignoreCase = true)) &&
@@ -3916,8 +3713,6 @@ fun SummaryRow(
 @Composable
 fun BillGeneratedScreen(
     bill: BillData,
-    logoUri: String,
-    fssaiNumber: String = "",
     onBackDashboard: () -> Unit,
     onSettlePayment: () -> Unit,
     onEditBill: () -> Unit,
@@ -3971,19 +3766,17 @@ fun BillGeneratedScreen(
                     modifier = Modifier.padding(18.dp)
                 ) {
 
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        if (logoUri.isNotBlank()) {
-                            LogoImage(logoUri, Modifier.size(58.dp))
-                            Spacer(Modifier.width(12.dp))
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text("CHAI VEDA", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepBrown)
-                            Text("Café • Juice • & More", color = TeaBrown)
-                            if (fssaiNumber.isNotBlank()) {
-                                Text("FSSAI: $fssaiNumber", fontSize = 11.sp, color = TeaBrown)
-                            }
-                        }
-                    }
+                    Text(
+                        text = "CHAI VEDA",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepBrown
+                    )
+
+                    Text(
+                        text = "Café • Juice • & More",
+                        color = TeaBrown
+                    )
 
                     Spacer(
                         modifier = Modifier.height(14.dp)
@@ -4199,7 +3992,7 @@ fun EditBillScreen(
     var cart by remember { mutableStateOf(bill.items.map { it.copy() }) }
     var selectedCategory by remember { mutableStateOf("All") }
 
-    val categories = listOf("All", "Chai", "Coffee", "Snacks", "Juice")
+    val categories = listOf("All") + products.map { it.category }.distinct().sorted()
     val filteredProducts = products.filter {
         it.available && (selectedCategory == "All" || it.category == selectedCategory)
     }
@@ -4682,69 +4475,67 @@ fun SettlementBillCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clickable {
+                onClick()
+            },
+
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = White)
+
+        colors = CardDefaults.cardColors(
+            containerColor = White
+        )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+
+                horizontalArrangement =
+                    Arrangement.SpaceBetween
             ) {
+
                 Text(
                     text = bill.billNumber,
                     fontWeight = FontWeight.Bold,
                     color = DeepBrown
                 )
-                PaymentStatusBadge(status = bill.paymentStatus)
+
+                PaymentStatusBadge(
+                    status = bill.paymentStatus
+                )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = if (bill.customerName.isBlank()) "Walk-in Customer" else bill.customerName,
-                fontWeight = FontWeight.SemiBold,
-                color = DeepBrown
+            Spacer(
+                modifier = Modifier.height(8.dp)
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text =
+                    if (bill.customerName.isBlank())
+                        "Walk-in Customer"
+                    else
+                        bill.customerName
+            )
+
+            Spacer(
+                modifier = Modifier.height(5.dp)
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+
+                horizontalArrangement =
+                    Arrangement.SpaceBetween
             ) {
+
                 Text(
-                    text = "🕒 ${bill.dateTime}",
-                    fontSize = 12.sp,
-                    color = TeaBrown,
-                    modifier = Modifier.weight(1f)
+                    text = "Total: ₹${bill.total}",
+                    color = TeaBrown
                 )
 
-                if (bill.orderType == "Dine-In" && bill.tableNumber.isNotBlank()) {
-                    Text(
-                        text = "🪑 ${bill.tableNumber}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TeaBrown
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = bill.orderType,
-                fontSize = 12.sp,
-                color = TeaBrown
-            )
-
-            Spacer(modifier = Modifier.height(7.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = "Total: ₹${bill.total}", color = TeaBrown)
                 Text(
                     text = "Due: ₹${bill.dueAmount}",
                     fontWeight = FontWeight.Bold,
